@@ -192,10 +192,35 @@ namespace ScanAPIDemo
 
         private void OnFormLoad(object sender, EventArgs e)
         {
-            ThreadStart worker = new ThreadStart(LoadScanner);
+            /*ThreadStart worker = new ThreadStart(LoadScanner);
             Thread t = new Thread(worker);
             t.IsBackground = true;
-            t.Start();
+            t.Start();*/
+
+            try
+            {
+                int defaultInterface = ScanAPIHelper.Device.BaseInterface;
+                FTRSCAN_INTERFACE_STATUS[] status = ScanAPIHelper.Device.GetInterfaces();
+
+                foreach (var st in status)
+                {
+                    if (st == FTRSCAN_INTERFACE_STATUS.FTRSCAN_INTERFACE_STATUS_CONNECTED)
+                    {
+                        ScanAPIHelper.Device.BaseInterface = 0;
+                        OpenDevice();
+                        m_hDevice.DetectFakeFinger = true;
+                        break;
+                    }
+                    m_lblCompatibility = "No Finger Device";
+                }
+
+                //RunAsyncVerify(2).Wait();
+            }
+            catch (ScanAPIException ex)
+            {
+                ShowError(ex);
+            }
+            m_ScanMode = 0;
         }
 
         private void ShowError(ScanAPIException ex)
@@ -461,12 +486,12 @@ namespace ScanAPIDemo
 
                         database.Clear();
 
-                        RunAsyncVerify(int.Parse(UserID)).Wait();
+                        RunAsyncVerify().Wait();
 
                         //BinaryFormatter formatter = new BinaryFormatter();
                         //database = (List<MyPerson>)formatter.Deserialize(fs);
 
-                        Fingerprint fp2 = new Fingerprint();
+                        /*Fingerprint fp2 = new Fingerprint();
                         fp2.AsBitmap = new Bitmap(byteArrayToImage(blob));
 
                         MyPerson person2 = new MyPerson();
@@ -486,7 +511,7 @@ namespace ScanAPIDemo
                         if (Score > 0)
                         {
                             SetMessageText(Score.ToString());
-                        }
+                        }*/
                     }
                     catch (Exception er)
                     {
@@ -510,7 +535,7 @@ namespace ScanAPIDemo
             }
         }
 
-        private async Task RunAsyncVerify(int id)
+        private async Task RunAsyncVerify()
         {
             try
             {
@@ -536,7 +561,7 @@ namespace ScanAPIDemo
                     FP_BLOB01 = blob
                 };
 
-                client = new RestClient("http://localhost:3293/api/verify/" + id.ToString());
+                client = new RestClient("http://localhost:3293/api/verify");
                 request = new RestRequest(Method.POST);
                 request.AddHeader("postman-token", "ac68cd3a-db3a-5340-438f-f190ddd53bde");
                 request.AddHeader("cache-control", "no-cache");

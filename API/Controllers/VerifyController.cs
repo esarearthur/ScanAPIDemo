@@ -16,7 +16,6 @@ using API.Models;
 
 namespace API.Controllers
 {
-    [Authorize]
     public class VerifyController : ApiController
     {
         private APIContext db = new APIContext();
@@ -28,67 +27,71 @@ namespace API.Controllers
             public String Name;
         }
 
-        private class FP_DATA
+        private MyPerson Enroll(Bitmap fprint, String name)
+        {
+            Fingerprint fp = new Fingerprint();
+            fp.AsBitmap = new Bitmap(fprint);
+
+            MyPerson person = new MyPerson();
+            person.Name = name;
+            person.Fingerprints.Add(fp);
+
+            Afis.Extract(person);
+
+            return person;
+        }
+
+        /*private class FP_DATA
         {
             public int FP_ID { get; set; } // or whatever
             public string FP_NAME { get; set; }  // or whatever
             public byte[] FP_BLOB { get; set; }  // or whatever
-        }
+        }*/
 
         [HttpPost]
         [ResponseType(typeof(FingerPrintDetails))]
-        public async Task<IHttpActionResult> PostFingerPrintDetails(FingerPrintDetails fingerPrintDetails)
+        public async Task<IHttpActionResult> VerifyFingerPrintDetails(FingerPrintDetails fingerPrintDetails)
         {
-            FP_DATA fp = new FP_DATA();
+            List<MyPerson> database = new List<MyPerson>();
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            // Convert scanned byte to image - source
-            // --------------------------------------
+            if(fingerPrintDetails.FP_BLOB01 == null)
+            {
+                return BadRequest();
+            }
 
-            // Convert byte to image
             Image img_src = byteArrayToImage(fingerPrintDetails.FP_BLOB01);
 
-            // Extract features from finger print image
-            Fingerprint fp1 = new Fingerprint();
-            fp1.AsBitmap = new Bitmap(img_src);
-            Person SourcePerson = new Person();
-            SourcePerson.Fingerprints.Add(fp1);
-            Afis.Extract(SourcePerson);
+            MyPerson probe = Enroll((Bitmap) img_src, "Visitor #12345");
 
-            // Get finger print image from database
-            var it = db.FingerPrintDetails.AsQueryable();
-            var items = db.FingerPrintDetails.Select(f => new FP_DATA
+            await db.FingerPrintDetails.LoadAsync();
+            var fpp = db.FingerPrintDetails.Local.Select(
+                x => new { x.FP_NAME, x.FP_BLOB01} ).ToList();
+
+            foreach(var v in fpp)
             {
-                FP_ID = f.FP_ID,
-                FP_NAME = f.FP_NAME,
-                FP_BLOB = f.FP_BLOB01 // Finger print image (BLOB)
-            });
-
-            // Convert byte to image
-            Image img_cmp = byteArrayToImage(fp.FP_BLOB);
-
-            // Extract features from finger print image
-            Fingerprint fp2 = new Fingerprint();
-            fp1.AsBitmap = new Bitmap(img_cmp);
-            Person DatabasePerson = new Person();
-            DatabasePerson.Fingerprints.Add(fp2);
-            Afis.Extract(DatabasePerson);
-
-            float Score = Afis.Verify(SourcePerson, DatabasePerson);
-
-            try
-            {
-                await db.SaveChangesAsync();
-            }
-            catch (DbUpdateException)
-            {
-                throw;
+                database.Add(Enroll((Bitmap)byteArrayToImage(v.FP_BLOB01), v.FP_NAME));
             }
 
-            return CreatedAtRoute("DefaultApi", new { id = fingerPrintDetails.Id }, fingerPrintDetails);
+            /*var fingerprintrec = from p in db.FingerPrintDetails.Local
+                                 select p.FP_NAME;
+
+            var it = db.FingerPrintDetails.SqlQuery("SELECT FP_ID, FP_NAME, FP_BLOB1 FROM dbo.FingerPrintDetails");
+
+            foreach(var i in it)
+            {
+                database.Add(Enroll((Bitmap)byteArrayToImage(i.FP_BLOB01), i.FP_NAME));
+            }*/
+
+            Afis.Threshold = 10;
+            Console.WriteLine("Identifying {0} in database of {1} persons...", probe.Name, database.Count);
+            MyPerson match = Afis.Identify(probe, database).FirstOrDefault() as MyPerson;
+
+            return Ok(match.Name);
         }
 
         private byte[] imageToByteArray(System.Drawing.Image imageIn)
