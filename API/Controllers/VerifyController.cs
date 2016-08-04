@@ -16,6 +16,7 @@ using API.Models;
 
 namespace API.Controllers
 {
+    [Authorize]
     public class VerifyController : ApiController
     {
         private APIContext db = new APIContext();
@@ -87,11 +88,15 @@ namespace API.Controllers
                 database.Add(Enroll((Bitmap)byteArrayToImage(i.FP_BLOB01), i.FP_NAME));
             }*/
 
-            Afis.Threshold = 10;
+            Afis.Threshold = 45;
             Console.WriteLine("Identifying {0} in database of {1} persons...", probe.Name, database.Count);
             MyPerson match = Afis.Identify(probe, database).FirstOrDefault() as MyPerson;
 
-            return Ok(match.Name);
+            if(match == null)
+                return Ok("Finger print not found");
+
+            float score = Afis.Verify(probe, match);
+            return Ok(match.Name + " Score: " + score.ToString());
         }
 
         private byte[] imageToByteArray(System.Drawing.Image imageIn)

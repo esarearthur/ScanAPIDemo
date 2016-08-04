@@ -140,10 +140,10 @@ namespace ScanAPIDemo
             return person;
         }
 
-        public Form1(String v1, String v2)
+        public Form1(String CT, String UID)
         {
-            CaptureType = v1;
-            UserID = v2;
+            CaptureType = CT;
+            UserID = UID;
 
             InitializeComponent();
             m_bIsLFDSupported = true;
@@ -192,35 +192,10 @@ namespace ScanAPIDemo
 
         private void OnFormLoad(object sender, EventArgs e)
         {
-            /*ThreadStart worker = new ThreadStart(LoadScanner);
+            ThreadStart worker = new ThreadStart(LoadScanner);
             Thread t = new Thread(worker);
             t.IsBackground = true;
-            t.Start();*/
-
-            try
-            {
-                int defaultInterface = ScanAPIHelper.Device.BaseInterface;
-                FTRSCAN_INTERFACE_STATUS[] status = ScanAPIHelper.Device.GetInterfaces();
-
-                foreach (var st in status)
-                {
-                    if (st == FTRSCAN_INTERFACE_STATUS.FTRSCAN_INTERFACE_STATUS_CONNECTED)
-                    {
-                        ScanAPIHelper.Device.BaseInterface = 0;
-                        OpenDevice();
-                        m_hDevice.DetectFakeFinger = true;
-                        break;
-                    }
-                    m_lblCompatibility = "No Finger Device";
-                }
-
-                //RunAsyncVerify(2).Wait();
-            }
-            catch (ScanAPIException ex)
-            {
-                ShowError(ex);
-            }
-            m_ScanMode = 0;
+            t.Start();
         }
 
         private void ShowError(ScanAPIException ex)
@@ -442,20 +417,16 @@ namespace ScanAPIDemo
                 System.Threading.Thread.Sleep(50);
 
                 CloseFile(AppDir + @"\candidate.bmp");
-                //CloseFile("database.dat");
+
+                Stream file = File.Create(AppDir + @"\candidate.bmp");
+                file.Write(myFile.BitmatFileData, 0, myFile.BitmatFileData.Length);
+                file.Close();
+                blob = imageToByteArray(Image.FromFile(AppDir + @"\candidate.bmp"));
 
                 if (CaptureType.ToLower() == "enrollment")
                 {
                     try
                     {
-                        Stream file = File.Create(AppDir + @"\candidate.bmp");
-                        file.Write(myFile.BitmatFileData, 0, myFile.BitmatFileData.Length);
-                        file.Close();
-
-                        blob = imageToByteArray(Image.FromFile(AppDir + @"\candidate.bmp"));
-                        
-                        MessageBox.Show(System.Text.Encoding.UTF8.GetString(blob));
-
                         database.Clear();
                         database.Add(Enroll(AppDir + @"\candidate.bmp", UserID));
 
@@ -477,13 +448,8 @@ namespace ScanAPIDemo
 
                 if(CaptureType.ToLower() == "verification")
                 {
-                    Stream file = File.Create(AppDir + @"\candidate.bmp");
-                    //Stream fs = File.Create(AppDir + @"\database.dat");
                     try
                     {
-                        file.Write(myFile.BitmatFileData, 0, myFile.BitmatFileData.Length);
-                        file.Close();
-
                         database.Clear();
 
                         RunAsyncVerify().Wait();
@@ -522,9 +488,7 @@ namespace ScanAPIDemo
                     {
                         //fs.Close();
                     }
-                }
-
-                
+                }                
                 this.Close();
             }
             catch (ScanAPIException ex)
@@ -571,7 +535,7 @@ namespace ScanAPIDemo
 
                 MessageBox.Show(response.Content);
                 //MessageBox.Show(JsonGetKey(FormatJson(response.Content), "FP_BLOB01"));
-                blob = Encoding.ASCII.GetBytes(JsonGetKey(FormatJson(response.Content), "FP_BLOB01"));
+                //blob = Encoding.ASCII.GetBytes(JsonGetKey(FormatJson(response.Content), "FP_BLOB01"));
             }
             catch(Exception er)
             {
