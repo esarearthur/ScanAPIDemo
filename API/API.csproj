@@ -248,6 +248,7 @@
     <Compile Include="AuthRepository.cs" />
     <Compile Include="Controllers\AccountController.cs" />
     <Compile Include="Controllers\FingerPrintDetailsController.cs" />
+    <Compile Include="Controllers\UserDetailsController.cs" />
     <Compile Include="Controllers\VerifyController.cs" />
     <Compile Include="Global.asax.cs">
       <DependentUpon>Global.asax</DependentUpon>
@@ -257,6 +258,7 @@
       <DependentUpon>201606162327250_Initial.cs</DependentUpon>
     </Compile>
     <Compile Include="Models\FP_Verify.cs" />
+    <Compile Include="Models\UserDetails.cs" />
     <Compile Include="Models\UserModel.cs" />
     <Compile Include="Providers\SimpleAuthorizationServerProvider.cs" />
     <Compile Include="To be deleted Global.asax.cs">
@@ -291,6 +293,7 @@
   <ItemGroup>
     <Folder Include="App_Data\" />
     <Folder Include="Views\Account\" />
+    <Folder Include="Views\UserDetails\" />
     <Folder Include="Views\Verify\" />
   </ItemGroup>
   <ItemGroup>

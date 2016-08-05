@@ -71,32 +71,29 @@ namespace API.Controllers
 
             await db.FingerPrintDetails.LoadAsync();
             var fpp = db.FingerPrintDetails.Local.Select(
-                x => new { x.FP_NAME, x.FP_BLOB01} ).ToList();
+                x => new { x.Id, x.FP_ID, x.FP_BLOB01} ).ToList();
+
+            /*if (fpp.Count < 1)
+                return Ok("-1 No finger print in db");*/
 
             foreach(var v in fpp)
             {
-                database.Add(Enroll((Bitmap)byteArrayToImage(v.FP_BLOB01), v.FP_NAME));
+                database.Add(Enroll((Bitmap)byteArrayToImage(v.FP_BLOB01), v.Id.ToString()));
             }
-
-            /*var fingerprintrec = from p in db.FingerPrintDetails.Local
-                                 select p.FP_NAME;
-
-            var it = db.FingerPrintDetails.SqlQuery("SELECT FP_ID, FP_NAME, FP_BLOB1 FROM dbo.FingerPrintDetails");
-
-            foreach(var i in it)
-            {
-                database.Add(Enroll((Bitmap)byteArrayToImage(i.FP_BLOB01), i.FP_NAME));
-            }*/
 
             Afis.Threshold = 45;
             Console.WriteLine("Identifying {0} in database of {1} persons...", probe.Name, database.Count);
             MyPerson match = Afis.Identify(probe, database).FirstOrDefault() as MyPerson;
 
-            if(match == null)
+            int nn = 0;
+            
+            if (match == null)
                 return Ok("Finger print not found");
 
+            var fp = await db.FingerPrintDetails.FindAsync(int.Parse(match.Name));
+
             float score = Afis.Verify(probe, match);
-            return Ok(match.Name + " Score: " + score.ToString());
+            return Ok(fp.Id.ToString() + " " + fp.FP_NAME + " Score: " + score.ToString());
         }
 
         private byte[] imageToByteArray(System.Drawing.Image imageIn)

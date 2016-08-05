@@ -1,23 +1,12 @@
 using System;
-using System.Globalization;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
-using System.Drawing.Imaging;
-using System.Text;
 using System.Windows.Forms;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.IO;
 
-using System.Windows.Media.Imaging;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
-
 // API2
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Threading.Tasks;
 
 // RestSharp
@@ -34,7 +23,7 @@ namespace ScanAPIDemo
 {
     public partial class Form1 : Form
     {
-        delegate void SetTextCallback(string text);
+        delegate void SetTextCallback(String text);
 
         const int FTR_ERROR_EMPTY_FRAME = 4306; /* ERROR_EMPTY */
         const int FTR_ERROR_MOVABLE_FINGER = 0x20000001;
@@ -76,6 +65,7 @@ namespace ScanAPIDemo
         private const UInt32 TOPMOST_FLAGS = SWP_NOMOVE | SWP_NOSIZE;
 
         private String TOKEN = String.Empty;
+        private String API_Resp = String.Empty;
         byte[] blob;
 
         #pragma warning disable 414
@@ -91,12 +81,6 @@ namespace ScanAPIDemo
         {
             public String Name;
         }
-
-        /*[Serializable]
-        class MyFingerprint : Fingerprint
-        {
-            public String Filename;
-        }*/
 
         private MyPerson _Enroll(String filename, String name)
         {
@@ -140,10 +124,21 @@ namespace ScanAPIDemo
             return person;
         }
 
-        public Form1(String CT, String UID)
+        public Form1(String[] args)
         {
-            CaptureType = CT;
-            UserID = UID;
+            if (args.Length == 3)
+            {
+                CaptureType = args[0];
+                UserID = args[1];
+                TOKEN = args[2];
+            }
+
+            if (args.Length == 2)
+            {
+                CaptureType = args[0];
+                UserID = args[1];
+                TOKEN = "";
+            }
 
             InitializeComponent();
             m_bIsLFDSupported = true;
@@ -180,8 +175,6 @@ namespace ScanAPIDemo
                     }
                     m_lblCompatibility = "No Finger Device";
                 }
-
-                //RunAsyncVerify(2).Wait();
             }
             catch (ScanAPIException ex)
             {
@@ -192,8 +185,7 @@ namespace ScanAPIDemo
 
         private void OnFormLoad(object sender, EventArgs e)
         {
-            ThreadStart worker = new ThreadStart(LoadScanner);
-            Thread t = new Thread(worker);
+            Thread t = new Thread(new ThreadStart(LoadScanner));
             t.IsBackground = true;
             t.Start();
         }
@@ -401,119 +393,27 @@ namespace ScanAPIDemo
             }
         }
 
-        private void GetFrame()
-        {
-            try
-            {
-                if (m_ScanMode == 0)
-                    m_Frame = m_hDevice.GetFrame();
-                else
-                    m_Frame = m_hDevice.GetImage(m_ScanMode);
-
-                SetMessageText("Finger OK");
-
-                MyBitmapFile myFile = new MyBitmapFile(m_hDevice.ImageSize.Width, m_hDevice.ImageSize.Height, m_Frame);
-
-                System.Threading.Thread.Sleep(50);
-
-                CloseFile(AppDir + @"\candidate.bmp");
-
-                Stream file = File.Create(AppDir + @"\candidate.bmp");
-                file.Write(myFile.BitmatFileData, 0, myFile.BitmatFileData.Length);
-                file.Close();
-                blob = imageToByteArray(Image.FromFile(AppDir + @"\candidate.bmp"));
-
-                if (CaptureType.ToLower() == "enrollment")
-                {
-                    try
-                    {
-                        database.Clear();
-                        database.Add(Enroll(AppDir + @"\candidate.bmp", UserID));
-
-                        BinaryFormatter formatter = new BinaryFormatter();
-
-                        Stream stream = File.Create(AppDir + @"\database.dat");
-                        formatter.Serialize(stream, database);
-                        stream.Close();
-
-                        RunAsyncEnroll().Wait();
-
-                        SetMessageText("Enrollment Done");
-                    }
-                    catch(Exception ex)
-                    {
-                        MessageBox.Show(ex.Message);
-                    }
-                }
-
-                if(CaptureType.ToLower() == "verification")
-                {
-                    try
-                    {
-                        database.Clear();
-
-                        RunAsyncVerify().Wait();
-
-                        //BinaryFormatter formatter = new BinaryFormatter();
-                        //database = (List<MyPerson>)formatter.Deserialize(fs);
-
-                        /*Fingerprint fp2 = new Fingerprint();
-                        fp2.AsBitmap = new Bitmap(byteArrayToImage(blob));
-
-                        MyPerson person2 = new MyPerson();
-                        person2.Name = UserID;
-                        person2.Fingerprints.Add(fp2);
-                        Afis.Extract(person2);
-
-                        Fingerprint fp1 = new Fingerprint();
-                        fp1.AsBitmap = new Bitmap(Bitmap.FromFile(AppDir + @"\candidate.bmp"));
-
-                        MyPerson person1 = new MyPerson();
-                        person1.Name = UserID;
-                        person1.Fingerprints.Add(fp1);
-                        Afis.Extract(person1);
-
-                        float Score = Afis.Verify(person2, person1);
-                        if (Score > 0)
-                        {
-                            SetMessageText(Score.ToString());
-                        }*/
-                    }
-                    catch (Exception er)
-                    {
-                        //throw;
-                        MessageBox.Show(er.InnerException.Message);
-                    }
-                    finally
-                    {
-                        //fs.Close();
-                    }
-                }                
-                this.Close();
-            }
-            catch (ScanAPIException ex)
-            {
-                if (m_Frame != null)
-                    m_Frame = null;
-                ShowError(ex);
-            }
-        }
-
         private async Task RunAsyncVerify()
         {
             try
             {
-                var cancellationTokenSource = new CancellationTokenSource();
+                CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+                RestClient client;
+                RestRequest request;
+                IRestResponse response;
 
-                var client = new RestClient("http://localhost:3293/api/token");
-                var request = new RestRequest(Method.POST);
-                request.AddHeader("content-type", "application/x-www-form-urlencoded");
-                request.AddHeader("postman-token", "7b69394f-bd17-e5be-ea62-fa46a435be6f");
-                request.AddHeader("cache-control", "no-cache");
-                request.AddParameter("application/x-www-form-urlencoded", "grant_type=password&username=esarearthur&password=123456", ParameterType.RequestBody);
-                IRestResponse response = await client.ExecuteTaskAsync(request, cancellationTokenSource.Token);
+                if (TOKEN == "")
+                {
+                    client = new RestClient("http://localhost:3293/api/token");
+                    request = new RestRequest(Method.POST);
+                    request.AddHeader("content-type", "application/x-www-form-urlencoded");
+                    request.AddHeader("postman-token", "7b69394f-bd17-e5be-ea62-fa46a435be6f");
+                    request.AddHeader("cache-control", "no-cache");
+                    request.AddParameter("application/x-www-form-urlencoded", "grant_type=password&username=esarearthur&password=123456", ParameterType.RequestBody);
+                    response = await client.ExecuteTaskAsync(request, cancellationTokenSource.Token);
 
-                TOKEN = JsonGetKey(FormatJson(response.Content), "access_token");
+                    TOKEN = JsonGetKey(FormatJson(response.Content), "access_token");
+                }
 
                 var FP_Details = new FingerPrintDetails()
                 {
@@ -533,47 +433,57 @@ namespace ScanAPIDemo
                 request.AddParameter("application/json", JsonConvert.SerializeObject(FP_Details, Formatting.Indented), ParameterType.RequestBody);
                 response = await client.ExecuteTaskAsync(request, cancellationTokenSource.Token);
 
-                MessageBox.Show(response.Content);
-                //MessageBox.Show(JsonGetKey(FormatJson(response.Content), "FP_BLOB01"));
-                //blob = Encoding.ASCII.GetBytes(JsonGetKey(FormatJson(response.Content), "FP_BLOB01"));
+                API_Resp = response.Content;
             }
-            catch(Exception er)
+            catch(Exception)
             {
-                MessageBox.Show(er.Message);
+                throw;
             }
         }
 
         private async Task RunAsyncEnroll()
         {
-            var cancellationTokenSource = new CancellationTokenSource();
-
-            var client = new RestClient("http://localhost:3293/api/token");
-            var request = new RestRequest(Method.POST);
-            request.AddHeader("content-type", "application/x-www-form-urlencoded");
-            request.AddHeader("postman-token", "7b69394f-bd17-e5be-ea62-fa46a435be6f");
-            request.AddHeader("cache-control", "no-cache");
-            request.AddParameter("application/x-www-form-urlencoded", "grant_type=password&username=esarearthur&password=123456", ParameterType.RequestBody);
-            IRestResponse response = await client.ExecuteTaskAsync(request, cancellationTokenSource.Token);
-
-            TOKEN = JsonGetKey(FormatJson(response.Content), "access_token");
-
-            var FP_Details = new FingerPrintDetails()
+            try
             {
-                FP_ID = int.Parse(UserID),
-                FP_NAME = "ANOTHER JOHN DOE",
-                FP_BLOB01 = blob
-            };
+                CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+                RestClient client;
+                RestRequest request;
+                IRestResponse response;
 
-            client = new RestClient("http://localhost:3293/api/FingerPrintDetails");
-            request = new RestRequest(Method.POST);
-            request.AddHeader("content-type", "application/x-www-form-urlencoded");
-            request.AddHeader("postman-token", "239d676d-3164-1906-7f58-7afbdd31f0b6");
-            request.AddHeader("cache-control", "no-cache");
-            request.AddHeader("authorization", "bearer " + TOKEN);
-            request.AddParameter("application/json", JsonConvert.SerializeObject(FP_Details, Formatting.Indented), ParameterType.RequestBody);
-            response = await client.ExecuteTaskAsync(request, cancellationTokenSource.Token);
+                if (TOKEN == "")
+                {
+                    client = new RestClient("http://localhost:3293/api/token");
+                    request = new RestRequest(Method.POST);
+                    request.AddHeader("content-type", "application/x-www-form-urlencoded");
+                    request.AddHeader("postman-token", "7b69394f-bd17-e5be-ea62-fa46a435be6f");
+                    request.AddHeader("cache-control", "no-cache");
+                    request.AddParameter("application/x-www-form-urlencoded", "grant_type=password&username=esarearthur&password=123456", ParameterType.RequestBody);
+                    response = await client.ExecuteTaskAsync(request, cancellationTokenSource.Token);
 
-            MessageBox.Show(response.Content);
+                    TOKEN = JsonGetKey(FormatJson(response.Content), "access_token");
+                }
+
+                var FP_Details = new FingerPrintDetails()
+                {
+                    FP_ID = int.Parse(UserID),
+                    FP_NAME = "JOHN DOE",
+                    FP_BLOB01 = blob
+                };
+
+                client = new RestClient("http://localhost:3293/api/FingerPrintDetails");
+                request = new RestRequest(Method.POST);
+                request.AddHeader("content-type", "application/x-www-form-urlencoded");
+                request.AddHeader("postman-token", "239d676d-3164-1906-7f58-7afbdd31f0b6");
+                request.AddHeader("cache-control", "no-cache");
+                request.AddHeader("authorization", "bearer " + TOKEN);
+                request.AddParameter("application/json", JsonConvert.SerializeObject(FP_Details, Formatting.Indented), ParameterType.RequestBody);
+                response = await client.ExecuteTaskAsync(request, cancellationTokenSource.Token);
+
+            }
+            catch (Exception)
+            {
+                throw;
+            }
         }
 
         public byte[] imageToByteArray(System.Drawing.Image imageIn)
@@ -609,6 +519,7 @@ namespace ScanAPIDemo
                 m_bCancelOperation = false;
                 m_btnSave.Enabled = false;
                 Thread WorkerThread = new Thread(new ThreadStart(CaptureThread));
+                WorkerThread.IsBackground = true;
                 WorkerThread.Start();
             }
             else
@@ -624,16 +535,64 @@ namespace ScanAPIDemo
             m_bScanning = true;
             while (!m_bCancelOperation)
             {
-                GetFrame();
-                if (m_Frame != null)
+                try
                 {
+                    if (m_ScanMode == 0)
+                        m_Frame = m_hDevice.GetFrame();
+                    else
+                        m_Frame = m_hDevice.GetImage(m_ScanMode);
+
+                    SetMessageText("Finger OK");
+
                     MyBitmapFile myFile = new MyBitmapFile(m_hDevice.ImageSize.Width, m_hDevice.ImageSize.Height, m_Frame);
                     MemoryStream BmpStream = new MemoryStream(myFile.BitmatFileData);
-                    Bitmap Bmp = new Bitmap(BmpStream);
-                    m_picture.Image = Bmp;
+
+                    blob = imageToByteArray(Image.FromStream(BmpStream));
+
+                    database.Clear();
+
+                    try
+                    {
+                        switch (CaptureType.ToLower())
+                        {
+                            case "enrollment":
+                                RunAsyncEnroll().Wait();
+                                SetMessageText("Enrollment Done");
+                                break;
+
+                            case "verification":
+                                RunAsyncVerify().Wait();
+                                SetMessageText("Verification Done");
+                                break;
+
+                            default:
+                                break;
+                        }
+                    }
+                    catch(Exception)
+                    {
+                        throw;
+                    }
+
+                    if (API_Resp != "")
+                    {
+                        String[] Split = API_Resp.Replace("\"", "").Split(' ');
+                        int n;
+                        if (int.TryParse(Split[0], out n))
+                            Environment.ExitCode = n;
+                    }
+                    else
+                        Environment.ExitCode = -100;
+
+                    this.Close();
                 }
-                else
-                    m_picture.Image = null;
+                catch (ScanAPIException ex)
+                {
+                    if (m_Frame != null)
+                        m_Frame = null;
+                    ShowError(ex);
+                }
+
                 Thread.Sleep(10);
             }
             m_bScanning = false;
